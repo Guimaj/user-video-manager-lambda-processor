@@ -20,12 +20,13 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install -r requirements.txt
+        mkdir lambda_package
+        pip install -r requirements.txt -t lambda_package/
 
     - name: Package Lambda function
       run: |
         mkdir -p lambda_package
-        cp lambda.py lambda_package/
+        cp lambda_function.py lambda_package/
         cd lambda_package
         zip -r ../lambda_function.zip .
         cd ..
@@ -42,7 +43,8 @@ jobs:
 
     - name: Create or Update Lambda Function
       run: |
-        FUNCTION_NAME=lambda-listener-update-video
+        FUNCTION_NAME=lambda-user-video-processor
+        ROLE_ARN=arn:aws:iam::851725324532:role/fiap-hackaton-lambda-role
         ZIP_FILE_PATH=lambda_function.zip
 
         # Check if the function exists
@@ -54,7 +56,8 @@ jobs:
           aws lambda create-function \
               --function-name $FUNCTION_NAME \
               --zip-file fileb://$ZIP_FILE_PATH \
-              --handler function.handler \
-              --environment Variables="{databaseName=${{ secrets.DB_NAME }},mongoUri=${{ secrets.MONGODB_URI }},collection=${{ secrets.COLLECTION }}}" \
+              --handler lambda_function.lambda_handler \
+              --role $ROLE_ARN \
+              --environment Variables="{databaseName=${{ secrets.DB_NAME }},mongoUri=${{ secrets.MONGODB_URI }},collection=${{ secrets.COLLECTION }},sqsUrl=${{ secrets.SQS_URL }}}" \
               --runtime python3.9
         fi
