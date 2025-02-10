@@ -1,0 +1,60 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Package Lambda function
+      run: |
+        mkdir -p lambda_package
+        cp lambda.py lambda_package/
+        cd lambda_package
+        zip -r ../lambda_function.zip .
+        cd ..
+
+    - name: List files
+      run: ls -la
+
+    - name: Set up AWS CLI
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Create or Update Lambda Function
+      run: |
+        FUNCTION_NAME=lambda-listener-update-video
+        ZIP_FILE_PATH=lambda_function.zip
+
+        # Check if the function exists
+        if aws lambda get-function --function-name $FUNCTION_NAME > /dev/null 2>&1; then
+          echo "Updating existing Lambda function..."
+          aws lambda update-function-code --function-name $FUNCTION_NAME --zip-file fileb://$ZIP_FILE_PATH
+        else
+          echo "Creating new Lambda function..."
+          aws lambda create-function \
+              --function-name $FUNCTION_NAME \
+              --zip-file fileb://$ZIP_FILE_PATH \
+              --handler function.handler \
+              --environment Variables="{databaseName=${{ secrets.DB_NAME }},mongoUri=${{ secrets.MONGODB_URI }},collection=${{ secrets.COLLECTION }}}" \
+              --runtime python3.9
+        fi
